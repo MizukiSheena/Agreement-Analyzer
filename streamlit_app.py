@@ -36,10 +36,27 @@ def prepare_private_repo() -> str:
         subprocess.check_call(["git", "clone", "--depth", "1", repo_url, workdir])
 
     # 安装依赖
-    req = pathlib.Path(workdir, "requirements.txt")
-    if req.exists():
-        with st.spinner("正在安装依赖……"):
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", str(req)])
+    # 可选：仅当你在 Secrets 中设置 INSTALL_PRIVATE_REQS="1" 时，才尝试安装私库 requirements
+    if st.secrets.get("INSTALL_PRIVATE_REQS", "0") == "1":
+        req = pathlib.Path(workdir, "requirements.txt")
+        if req.exists():
+            with st.spinner("正在安装依赖（可通过 Secrets 关闭）……"):
+                proc = subprocess.run(
+                    [
+                        sys.executable,
+                        "-m",
+                        "pip",
+                        "install",
+                        "--no-cache-dir",
+                        "-r",
+                        str(req),
+                    ],
+                    text=True,
+                    capture_output=True,
+                )
+            if proc.returncode != 0:
+                st.error("依赖安装失败：\n" + (proc.stderr or proc.stdout)[-4000:])
+                raise subprocess.CalledProcessError(proc.returncode, proc.args)
 
     # 将私有仓库加入模块搜索路径，并切换目录（兼容相对路径）
     sys.path.insert(0, workdir)
@@ -64,4 +81,5 @@ if __name__ == "__main__":
         st.info("请确认 GH_PAT 有效且具备私有仓库读取权限（repo:read）。")
     except Exception as e:
         st.error(f"应用启动异常：{e}")
+
 
