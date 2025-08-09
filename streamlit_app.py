@@ -58,18 +58,23 @@ def prepare_private_repo() -> str:
                 st.error("依赖安装失败：\n" + (proc.stderr or proc.stdout)[-4000:])
                 raise subprocess.CalledProcessError(proc.returncode, proc.args)
 
-    # 将私有仓库加入模块搜索路径，并切换目录（兼容相对路径）
-    sys.path.insert(0, workdir)
-    os.chdir(workdir)
+    # 仅将私有仓库加入模块搜索路径，不切换工作目录，避免 Streamlit rerun 时找不到主脚本
+    if workdir not in sys.path:
+        # 追加到 sys.path 尾部，避免与本启动脚本同名模块冲突（如 streamlit_app.py）
+        sys.path.append(workdir)
     return workdir
 
 
 def run_app():
-    _ = prepare_private_repo()
-    # 延迟导入核心应用
-    from batch_web_interface import main, show_sidebar_info
-    main()
-    show_sidebar_info()
+    core_dir = prepare_private_repo()
+    # 延迟导入核心应用（显式导入模块名，避免与当前脚本名混淆）
+    import importlib.util, os
+    module_path = os.path.join(core_dir, "batch_web_interface.py")
+    spec = importlib.util.spec_from_file_location("batch_web_interface", module_path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)  # type: ignore
+    mod.main()
+    mod.show_sidebar_info()
 
 
 if __name__ == "__main__":
@@ -81,5 +86,4 @@ if __name__ == "__main__":
         st.info("请确认 GH_PAT 有效且具备私有仓库读取权限（repo:read）。")
     except Exception as e:
         st.error(f"应用启动异常：{e}")
-
 
