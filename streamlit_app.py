@@ -41,24 +41,26 @@ def prepare_private_repo() -> str:
         req = pathlib.Path(workdir, "requirements.txt")
         if req.exists():
             with st.spinner("正在安装依赖（可通过 Secrets 关闭）……"):
-                proc = subprocess.run(
-                    [
-                        sys.executable,
-                        "-m",
-                        "pip",
-                        "install",
-                        "--user",
-                        "--no-cache-dir",
-                        "--disable-pip-version-check",
-                        "-r",
-                        str(req),
-                    ],
-                    text=True,
-                    capture_output=True,
-                )
-            if proc.returncode != 0:
-                st.error("依赖安装失败：\n" + (proc.stderr or proc.stdout)[-4000:])
-                raise subprocess.CalledProcessError(proc.returncode, proc.args)
+                try:
+                    proc = subprocess.run(
+                        [
+                            sys.executable,
+                            "-m",
+                            "pip",
+                            "install",
+                            "--no-cache-dir",
+                            "--disable-pip-version-check",
+                            "-r",
+                            str(req),
+                        ],
+                        text=True,
+                        capture_output=True,
+                    )
+                    if proc.returncode != 0:
+                        st.warning("私有仓库依赖安装失败，但公开仓库已包含基础依赖，继续运行...")
+                        st.code(f"安装错误：{proc.stderr or proc.stdout}")
+                except Exception as e:
+                    st.warning(f"依赖安装遇到问题，但公开仓库已包含基础依赖，继续运行: {e}")
 
     # 仅将私有仓库加入模块搜索路径，不切换工作目录，避免 Streamlit rerun 时找不到主脚本
     if workdir not in sys.path:
